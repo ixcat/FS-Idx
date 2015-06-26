@@ -1,0 +1,63 @@
+.. $Id$
+
+fsidx utilities
+===============
+
+attempting to:
+
+  - collect full filesystem stat info
+  - generate valid accounting data
+  - generate other statistics
+
+on a given filesystem.
+
+Current Status
+--------------
+
+The following are tested functional currently:
+
+bin/passdb    : user password database caching tool
+bin/idxrpt    : filesystem index report/dump tool
+bin/idxsum    : filesytem index summary data generator tool
+bin/fsidx     : filesystem indexer tool
+bin/filetimes : user-to-last-modified-filetime report tool
+
+lib/FS/Idx/Sum.pm : index-summary DBMs utility class
+lib/FS/Idx/App.pm : application class for 'fsidx' tool
+lib/FS/Idx/Report/App.pm : application class for idxrpt-like utilities
+lib/FS/Idx/Sum/App.pm : application class for idxsum utility
+lib/FS/Idx.pm : filesystem index DBM class
+lib/User/PassDB.pm : user passwd data DBM class
+lib/User/PassDB/App.pm : application class for passdb utility
+
+Eventually/Planned
+------------------
+
+v3: implement 'system interfacing' layer
+- make compatible with fs quotas ( to allow single pass acctg stuff )
+- allow for account mgmt script generation
+
+RHEL Packages
+-------------
+
+# yum --enablerepo=rpmforge install perl-MLDBM perl-YAML
+
+Misc
+----
+
+*Quota Interfacing*
+
+The perl 'Quota' module is quite comprehensive. It fails to build on el6.
+
+       http://pkgs.repoforge.org/perl-Quota
+     
+note here on el6 buildfail:
+
+  http://bugs.contribs.org/show_bug.cgi?id=7253
+
+which in turn referrs to:
+
+  http://centos.rutgers.edu/koji/buildinfo?buildID=2555
+
+for a fix.
+

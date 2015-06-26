@@ -1,0 +1,17 @@
+doc/examples/fsidx-test.mk
+doc/examples/idxrpt.t.mk
+doc/examples/idxrpt-customex
+doc/fsidx.txt
+lib/FS/Idx/Sum.pm
+lib/FS/Idx/App.pm
+lib/FS/Idx/Report/App.pm
+lib/FS/Idx/Sum/App.pm
+lib/FS/Idx.pm
+bin/idxsum2sql
+bin/idxrpt
+bin/idxsum
+bin/fsidx
+bin/filetimes
+README
+MANIFEST
+Makefile.PL

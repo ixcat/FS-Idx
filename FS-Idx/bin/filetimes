@@ -1,0 +1,182 @@
+#! /usr/bin/env perl
+
+#
+# hackish user / last file alteration lookup script
+#
+# hackish as:
+#
+#   - basically, manipulates Idx::Report::App to more cleanly
+#     use the '-E' eval interface than triggering external batch jobs
+#   - which is only hackish since the eval interface is not clean enough
+#     to use programattically
+#
+#   but, the main 'reporting' logic defined here should be somewhat portable 
+#   to any cleaned up interface that might be developed in the future.
+#
+
+use strict;
+use warnings;
+
+use Carp;
+
+use YAML;
+use Time::localtime;
+
+use FindBin;
+use lib "$FindBin::Bin" . "/../lib";
+
+use FS::Idx::Report::App;
+
+( my $me = $0 ) =~ s:.*/::;
+
+die "usage: $me userdb statdb [ ndays ]\n" unless scalar @ARGV >= 2;
+
+my $udp = shift;
+my $sdp = shift;
+my $ndays = shift;
+$ndays = 0 unless $ndays;
+
+my $SPOOFV = [
+	'-h',
+	'-u', $udp, 
+	$sdp
+]; # hmm - could splice in argv remnants here for user / date processing herm.
+
+my $OLDV = [ @ARGV ];
+@ARGV = @{$SPOOFV};
+
+my $app = FS::Idx::Report::App->new();
+
+$app->_parse_opts();
+
+#print $app->{uiddb} . "\n";
+#print $app->{sumdb} . "\n";
+
+my $evalcode=<<'__EOE__'
+sub {
+my $cbs = {};
+
+$cbs->{precb} = sub {
+	our $cbdat = {};
+
+	my $now = time();
+	$cbdat->{now} = $now;
+	$cbdat->{then} = $now - ((60*60*24)*_NDAYS_);
+
+	$cbdat->{old} = {};
+
+	$cbdat->{asum} = { # all/aggregate summary
+		'nfile' => 0,
+		'nbyte' => 0
+	}; 
+	$cbdat->{osum} = { # old/aggregate summary
+		'nfile' => 0,
+		'nbyte' => 0
+	}; 
+};
+
+$cbs->{cbsub} = sub {
+
+	my($k,$v) = @_;
+
+	our $cbdat;
+
+	my $now = $cbdat->{now};
+	my $then = $cbdat->{then};
+
+	my $asum = $cbdat->{asum};
+	my $osum = $cbdat->{osum};
+
+	# find applicable timestamp
+
+	# since clock skew can happen, track octime and
+	# attempt to detect skew by comparing new stamps 
+	# to current time.
+
+	my $new = $v->{octime};
+	my $which = 'octime';
+
+	foreach my $field ('octime','nmtime','nctime') {
+		my $fval = $v->{$field};
+		if($fval > $new && $fval < $now ) {
+			$new = $fval;
+			$which = $field;
+		}
+	}
+
+	# store record for later reporting if applicable
+
+	# XXX: could do per-record reporting inline durr
+
+	if ($new < $then) {
+
+		my $pwkey = _uidify($k,$uiddb);
+		my $readable = FS::Idx::Report::App::_readify($v);
+
+		$cbdat->{old}->{$pwkey} = {
+			nfile => $readable->{nfile},
+			nbyte => $readable->{nbyte},
+			last => $readable->{$which},
+			which => $which
+		};
+
+		$osum->{nbyte} += $v->{nbyte};
+		$osum->{nfile} ++;
+
+	}
+
+	$asum->{nbyte} += $v->{nbyte};
+	$asum->{nfile}++;
+};
+
+$cbs->{postcb} = sub {
+
+	our $cbdat;
+	my $old = $cbdat->{old};
+	my $asum = $cbdat->{asum};
+	my $osum = $cbdat->{osum};
+
+	print "# filetimes report (older than _NDAYS_)\n\n";
+
+	print "# Per User Information\n\n";
+
+	printf "|%-16s|%-8s|%-10s|%-6s |%-10s |\n",
+		"user", "nfile", "nbyte", "last", "which";
+
+	my $ufmt = "|%-16s|%-8d|%-10d|%-6s |%-10s |\n";
+	while ( my ($k,$v) = each %{$old} ) {
+		my $i = $old->{$k};
+		( my $lst = $i->{last} ) =~ s: .*::; # just the date is ok
+
+		printf $ufmt, $k, $i->{nfile}, $i->{nbyte}, 
+			$i->{which}, $lst;
+	}
+	print "\n";
+
+	print "# Aggregate information\n\n";
+	print "stale/users(pctstale) stale/bytes(pctstale)\n";
+
+	printf "%d/%d(%.0f%%) %d/%d(%.0f%%)\n",
+		$osum->{nfile}, $asum->{nfile}, 
+			($osum->{nfile}/$asum->{nfile})*100,
+		$osum->{nbyte}, $asum->{nbyte}, 
+			($osum->{nbyte}/$asum->{nbyte})*100;
+
+	print "\n";
+
+};
+
+return $cbs;
+};
+__EOE__
+;
+
+# set user code in script 
+# (evalcode set in single quoted string, eval scope different)
+
+$evalcode =~ s:_NDAYS_:$ndays:g;
+
+$app->{opts}->{E} = $evalcode;
+
+exit $app->dump;
+
