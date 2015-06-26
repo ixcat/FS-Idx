@@ -1,0 +1,29 @@
+#! /usr/bin/env perl
+
+# $Id$
+#
+# generate an index summary database for a given index
+#
+# usage: idxsum [ -s sum.db ] idx.db [matchrx]
+#
+# if -s is not given, the file 'sum.db' will be created and 
+# used if it does not already exist.
+#
+# the program expects to generate a clean database each time -
+# no provision is made for updates, etc.
+#
+# data dumping/reporting etc. will be handled via a different utility.
+#
+
+package main;
+
+use strict;
+use warnings;
+
+use FindBin;
+use lib "$FindBin::Bin" . "/../lib";
+
+use FS::Idx::Sum::App;
+
+exit FS::Idx::Sum::App->new()->run();
+
