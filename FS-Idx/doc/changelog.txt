@@ -1,0 +1,9 @@
+
+v1.01: 
+
+  update of Idx::Sum object to allow library usage via 'addfile' method
+
+v1.00: 
+
+  initial release. FS::Idx, FS::Idx::Sum and related tools functional
+
