@@ -4,6 +4,11 @@
 #
 # $Id$
 #
+# FIXME/NOTE:
+#
+#   - does not currently track inodes of files, so hardlinked files
+#     will be counted as many times as they are linked in a given source index.
+#
 
 package FS::Idx::Sum;
 
@@ -21,6 +26,7 @@ use FS::Idx;
 # sub predecls
 
 sub new;
+sub addfile;
 sub process;
 sub eachcb;
 
@@ -67,7 +73,8 @@ sub new { # new(sumdbfile, flags, matchrx, filtrx)
 
 }
 
-#   compute per user:
+# Add a file to the summary data - will update per user:
+#
 #     - file count
 #     - byte count (also blocks? herm)
 #     - oldest atime
@@ -76,6 +83,73 @@ sub new { # new(sumdbfile, flags, matchrx, filtrx)
 #     - newest atime
 #     - newest mtime
 #     - newest ctime
+#
+# according to the file stat(2) metadata.
+#
+
+sub addfile { # addfile(fname, finfo)
+
+	my $self = shift;
+	my $fname = shift;
+	my $finfo = shift;
+
+	my $sum = $self->{sum};
+	my $matchrx = $self->{matchrx};
+	my $filtrx = $self->{filtrx};
+
+	return unless $fname =~ m:$self->{matchrx}:;
+	return if $fname =~ m:$self->{filtrx}:;
+
+	my $uid = $finfo->uid();
+	my $size = $finfo->size();
+	my $atime = $finfo->atime();
+	my $mtime = $finfo->mtime();
+	my $ctime = $finfo->ctime();
+
+	my $user = $sum->{$uid};
+
+	if(!$user) {
+		$user = {
+			nfile => 1,
+			nbyte => $size,
+			oatime => $atime,
+			omtime => $mtime,
+			octime => $ctime,
+			natime => $atime,
+			nmtime => $mtime,
+			nctime => $ctime
+		};
+	}
+	else {
+		$user->{nfile}++;
+		$user->{nbyte} += $size;
+
+		$user->{oatime} = $atime if $user->{oatime} > $atime;
+		$user->{omtime} = $mtime if $user->{omtime} > $mtime;
+		$user->{octime} = $ctime if $user->{octime} > $ctime;
+
+		$user->{natime} = $atime if $user->{natime} < $atime;
+		$user->{nmtime} = $mtime if $user->{nmtime} < $mtime;
+		$user->{nctime} = $ctime if $user->{nctime} < $ctime;
+	}
+
+	$sum->{$uid} = $user;
+
+}
+
+# compute aggregate per user:
+#
+#   - file count
+#   - byte count (also blocks? herm)
+#   - oldest atime
+#   - oldest mtime
+#   - oldest ctime
+#   - newest atime
+#   - newest mtime
+#   - newest ctime
+#
+# for a given file path.
+#
 
 sub process { # process($idxdbpath)
 
@@ -94,47 +168,11 @@ sub process { # process($idxdbpath)
 	}
 
 	$idx->eachcb( sub {
-		
 		my ($k,$v) = @_;
+		$self->addfile($k,$v);
+	} );
 
-		return unless $k =~ m:$matchrx:;
-		return if $k =~ m:$filtrx:;
-
-		my $uid = $v->uid();
-		my $size = $v->size();
-		my $atime = $v->atime();
-		my $mtime = $v->mtime();
-		my $ctime = $v->ctime();
-
-		my $user = $sum->{$uid};
-
-		if(!$user) {
-			$user = {
-				nfile => 1,
-				nbyte => $size,
-				oatime => $atime,
-				omtime => $mtime,
-				octime => $ctime,
-				natime => $atime,
-				nmtime => $mtime,
-				nctime => $ctime
-			};
-		}
-		else {
-			$user->{nfile}++;
-			$user->{nbyte} += $size;
-
-			$user->{oatime} = $atime if $user->{oatime} > $atime;
-			$user->{omtime} = $mtime if $user->{omtime} > $mtime;
-			$user->{octime} = $ctime if $user->{octime} > $ctime;
-
-			$user->{natime} = $atime if $user->{natime} < $atime;
-			$user->{nmtime} = $mtime if $user->{nmtime} < $mtime;
-			$user->{nctime} = $ctime if $user->{nctime} < $ctime;
-		}
-
-		$sum->{$uid} = $user;
-	} );	
+	return 0;
 
 }
 
