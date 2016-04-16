@@ -1,0 +1,139 @@
+#! /usr/bin/env perl
+
+# idxsum2sql: FS::Idx::Sum to sql conversion
+#
+# Hackish converter FS::Idx::Sum to SQL - in progress
+#
+# $Id$
+#
+
+use strict;
+use warnings;
+
+use FindBin;
+use lib "$FindBin::Bin" . "/../lib";
+
+use FS::Idx::Sum;
+use User::PassDB;
+
+use YAML;
+
+# sub predecls
+
+sub usage_exit;
+sub schema;
+sub convert;
+sub main;
+
+# subs
+
+sub usage_exit {
+	( my $app = $0 ) =~ s:.*/::;
+	print "usage: $app {schema|convert idxname uid.db idxsum.db}\n";
+	exit 0;
+}
+
+sub schema {
+	print while (<DATA>);
+}
+
+# XXX: todo: uid conversion
+
+sub convert {
+	my ($idxname,$uiddbp,$sumdbp) = @_;
+
+	my $uiddb = User::PassDB->new($uiddbp) 
+		or die "couldn't open uiddb: $uiddbp: $!\n";
+
+	my $sumdb = FS::Idx::Sum->new($sumdbp) 
+		or die "couldn't open idxsumdb: $sumdbp: $!\n";
+
+	print "begin transaction;\n";
+
+	$sumdb->eachcb(sub {
+
+		my ($user,$data) = @_;
+
+		my $urec = $uiddb->getpwuid($user);
+
+		$user = $urec->name() if $urec;
+
+		print "insert into idxsumdata values ("
+			. "'$user',"
+			. "'$idxname',"
+			. $data->{nfile} . ','
+			. $data->{nbyte} . ','
+			. $data->{oatime} . ','
+			. $data->{omtime} . ','
+			. $data->{octime} . ','
+			. $data->{natime} . ','
+			. $data->{nmtime} . ','
+			. $data->{nctime}
+		. ");\n";
+
+	});
+
+	print "commit;\n";
+}
+
+sub main {
+
+	my ($cmd,$name,$uiddb,$sumdb) = @_ ;
+
+	$cmd = 'default' unless $cmd;
+
+	if ($cmd eq 'schema') {
+		schema;
+		return 0;
+	}
+
+	if ($cmd eq 'convert') {
+		usage_exit unless ($name && $uiddb && $sumdb);
+		convert $name, $uiddb, $sumdb;
+		return 0;
+	}
+
+	usage_exit;
+}
+
+exit main @ARGV;
+
+1;
+__DATA__
+
+--
+-- FS::Idx::Sum SQL database schema 
+--
+-- $Id$
+--
+-- data from index summary is:
+--
+-- 41337:
+--   natime: 1428317653
+--   nbyte: 13835403826
+--   nctime: 1428165035
+--   nfile: 12478
+--   nmtime: 1428165035
+--   oatime: 1241040308
+--   octime: 1256842193
+--   omtime: 823037501
+--
+-- schma currently intended to:
+--   - be used with human-readable usernames 
+--   - be used to store multiple summary sets indicated by index name
+--
+
+create table idxsumdata (
+	user text not null,
+	idxname text not null,
+	nfile integer not null,
+	nbyte integer not null,
+	oatime integer not null,
+	omtime integer not null,
+	octime integer not null,
+	natime integer not null,
+	nmtime integer not null,
+	nctime integer not null,
+	primary key (user,idxname)
+);
+

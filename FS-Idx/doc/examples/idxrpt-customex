@@ -1,0 +1,76 @@
+#! /usr/bin/env perl
+
+# hackish:
+#   - basically, manipulates Idx::ReportMain to more cleanly
+#     use the '-E' eval interface.. in order to avoid dealing with
+#     uid->logname translations and other sultry details
+#
+#   - which is only hackish since the eval interface is not clean enough
+#     to use programattically
+#
+# but, the main 'reporting' logic defined here should be somewhat portable 
+# to any cleaned up interface that might be developed in the future.
+# 
+
+use strict;
+use warnings;
+
+use Carp;
+
+use YAML;
+
+use FindBin;
+use lib "$FindBin::Bin" . "/../lib";
+
+use FS::Idx::Report::App;
+
+die "usage: $0 userdb statdb\n" unless scalar @ARGV == 2;
+
+my $udp = shift;
+my $sdp = shift;
+
+my $SPOOFV = [
+	'-h',
+	'-u', $udp, 
+	$sdp
+]; # hmm - could splice in argv remnants here for user processing herm.
+
+my $OLDV = [ @ARGV ];
+@ARGV = @{$SPOOFV};
+
+my $app = FS::Idx::Report::App->new();
+
+$app->_parse_opts();
+
+#print $app->{uiddb} . "\n";
+#print $app->{sumdb} . "\n";
+
+my $evalcode=<<'__EOE__'
+sub {
+my $cbs = {};
+
+$cbs->{precb} = sub {
+	our $cbdat = {};
+	$cbdat->{nrec} = 0;
+};
+
+$cbs->{cbsub} = sub {
+	our $cbdat;
+	$cbdat->{nrec}++;
+};
+
+$cbs->{postcb} = sub {
+	our $cbdat;
+	print YAML::Dump $cbdat;
+};
+
+return $cbs;
+};
+__EOE__
+;
+# print "$evalcode\n";
+
+$app->{opts}->{E} = $evalcode;
+
+exit $app->dump;
+
