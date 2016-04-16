@@ -7,6 +7,7 @@
 
 package FS::Idx::Sum::App;
 
+use Carp;
 use warnings;
 use strict;
 
@@ -36,10 +37,14 @@ sub new {
 
 sub run {
 	my $self = shift;
+	my $ret;
 	$self->_usage_exit if scalar @ARGV < 1;
 	$self->_parse_opts;
 
-	return $self->_process;
+	$ret = $self->_process;
+	carp "error: $!\n" if $ret;
+
+	return $ret;
 }
 
 sub _usage_exit {
@@ -91,7 +96,7 @@ sub _process {
 	) 
 	or die "error creating summary db ($sumpath): $!\n";
 
-	if(!$self->{sum}->process($idxpath)) {
+	if($self->{sum}->process($idxpath)) {
 		return -1;
 	}
 	return 0;
