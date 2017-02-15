@@ -1,6 +1,13 @@
-$Id$
 
-fsidx: filesystem indexer and related utilities
+FS-Idx: perl tied hash filesystem metadata indexer & related utilities
+
+Requires MLDBM.
 
 see doc/fsidx.txt for more
+
+installation:
+
+  perl Makefile.PL
+  make
+  make install
 
